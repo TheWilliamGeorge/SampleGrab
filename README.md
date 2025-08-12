@@ -8,7 +8,7 @@ MacOS (Intel and ARM)
 Linux
 Python Universal (requires XXXXXXXX)
 
-A Windows build is under development, so for now, please use the Python Universal version (SampleGrab.py)
+A Windows build is under development, so for now, please use the Python Universal version ([SampleGrab.py](https://github.com/TheWilliamGeorge/SampleGrab/blob/main/SampleGrab.py))
 
 ## Installation
 #### MacOS: 
