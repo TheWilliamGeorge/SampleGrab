@@ -9,6 +9,17 @@ MacOS (Intel and ARM)
 Linux
 Python Universal (requires XXXXXXXX)
 
+## Installation
+#### Windows:
+#### MacOS: 
+Unzip the file and double-click SampleGrab.app
+#### Linux:
+Unzip the file and run the .bin file. Requires PortAudio. If you do not have this installed, run: 
+```bash
+sudo apt-get install libportaudio2
+```
+
+
 ## Features
 - Keyboard layout with labelled keys for intuitive recording
 - Click-to-record functionality on each key to automatically assign the pitch to the sound
