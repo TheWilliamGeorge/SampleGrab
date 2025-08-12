@@ -4,13 +4,13 @@ Available for Windows, MacOS and Linux
 Python version available
 
 ## Versions
-Windows
 MacOS (Intel and ARM)
 Linux
 Python Universal (requires XXXXXXXX)
 
+A Windows build is under development, so for now, please use the Python Universal version (SampleGrab.py)
+
 ## Installation
-#### Windows:
 #### MacOS: 
 Unzip the file and double-click SampleGrab.app
 #### Linux:
