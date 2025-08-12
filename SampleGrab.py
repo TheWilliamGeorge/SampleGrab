@@ -34,6 +34,10 @@ import sounddevice as sd
 import soundfile as sf
 import numpy as np
 
+import struct
+import wave
+import re
+
 # --- Config / paths ---
 DEFAULT_SR = 44100
 DEFAULT_CHANNELS = 1
@@ -46,6 +50,132 @@ WHITE_KEY_W = 60
 WHITE_KEY_H = 220
 BLACK_KEY_W = int(WHITE_KEY_W * 0.62)
 BLACK_KEY_H = int(WHITE_KEY_H * 0.60)
+
+NOTE_OFFSETS = {
+    'C': 0, 'C#': 1, 'DB': 1,
+    'D': 2, 'D#': 3, 'EB': 3,
+    'E': 4,
+    'F': 5, 'F#': 6, 'GB': 6,
+    'G': 7, 'G#': 8, 'AB': 8,
+    'A': 9, 'A#': 10, 'BB': 10,
+    'B': 11
+}
+
+def parse_note_token(token: str):
+    m = re.match(r'^([A-Ga-g])([#b]?)(-?\d+)$', token.strip())
+    if not m:
+        return None
+    note = m.group(1).upper()
+    acc = m.group(2)
+    octave = int(m.group(3))
+    if acc == 'b':
+        note = note + 'B'
+    elif acc == '#':
+        note = note + '#'
+    return note, octave
+
+def note_to_midi(note: str, octave: int, mapping: str = 'c4') -> int:
+    note_key = note.upper()
+    if note_key not in NOTE_OFFSETS:
+        raise ValueError(f"Unknown note name: {note}")
+    offset = NOTE_OFFSETS[note_key]
+    if mapping == 'c4':
+        midi = (octave - 4) * 12 + 60 + offset
+    elif mapping == 'c3':
+        midi = (octave - 3) * 12 + 60 + offset
+    else:
+        raise ValueError("mapping must be 'c4' or 'c3'")
+    if not (0 <= midi <= 127):
+        raise ValueError(f"MIDI note out of range: {midi}")
+    return midi
+
+def build_smpl_chunk(sample_rate: int, midi_unity_note: int) -> bytes:
+    manufacturer = 0
+    product = 0
+    sample_period = max(1, int(1_000_000_000 / sample_rate))
+    midi_pitch_fraction = 0
+    smpte_format = 0
+    smpte_offset = 0
+    num_sample_loops = 0
+    sampler_data = 0
+    payload = struct.pack(
+        '<9I',
+        manufacturer,
+        product,
+        sample_period,
+        midi_unity_note,
+        midi_pitch_fraction,
+        smpte_format,
+        smpte_offset,
+        num_sample_loops,
+        sampler_data
+    )
+    chunk = b'smpl' + struct.pack('<I', len(payload)) + payload
+    if len(payload) % 2 == 1:
+        chunk += b'\x00'
+    return chunk
+
+def read_riff_chunks(f):
+    chunks = []
+    while True:
+        header = f.read(8)
+        if len(header) < 8:
+            break
+        cid, csize = struct.unpack('<4sI', header)
+        data = f.read(csize)
+        if csize % 2 == 1:
+            _ = f.read(1)
+        chunks.append((cid, data))
+    return chunks
+
+def write_riff_file(out_path: str, chunks):
+    total = 4 + sum(8 + len(d) + (len(d) % 2) for (_, d) in chunks)
+    with open(out_path, 'wb') as fo:
+        fo.write(b'RIFF' + struct.pack('<I', total) + b'WAVE')
+        for cid, data in chunks:
+            fo.write(cid)
+            fo.write(struct.pack('<I', len(data)))
+            fo.write(data)
+            if len(data) % 2 == 1:
+                fo.write(b'\x00')
+
+def inject_smpl(in_filepath: str, midi_note: int, backup: bool = True):
+    with open(in_filepath, 'rb') as fi:
+        header = fi.read(12)
+        riff, riff_size, wave_id = struct.unpack('<4sI4s', header)
+        if riff != b'RIFF' or wave_id != b'WAVE':
+            raise IOError("Not a valid WAV file")
+        chunks = read_riff_chunks(fi)
+
+    fmt_chunk = next((d for (c, d) in chunks if c == b'fmt '), None)
+    if fmt_chunk and len(fmt_chunk) >= 12:
+        sample_rate = struct.unpack_from('<I', fmt_chunk, 4)[0]
+    else:
+        with wave.open(in_filepath, 'rb') as wf:
+            sample_rate = wf.getframerate()
+
+    new_chunks = [(c, d) for (c, d) in chunks if c != b'smpl']
+    smpl_chunk = build_smpl_chunk(sample_rate, midi_note)
+    cid = smpl_chunk[0:4]
+    size = struct.unpack('<I', smpl_chunk[4:8])[0]
+    payload = smpl_chunk[8:8 + size]
+    new_chunks.append((cid, payload))
+
+    if backup:
+        # Determine project name from recordings folder structure
+        recordings_dir = os.path.dirname(in_filepath)
+        project_name = os.path.basename(recordings_dir)
+        backup_dir = os.path.join("backups", project_name)
+        os.makedirs(backup_dir, exist_ok=True)
+
+        bak_path = os.path.join(backup_dir, os.path.basename(in_filepath) + ".bak")
+        if not os.path.exists(bak_path):
+            shutil.copy2(in_filepath, bak_path)
+
+    tmp_out = in_filepath + '.tmp'
+    write_riff_file(tmp_out, new_chunks)
+    os.replace(tmp_out, in_filepath)
+
 
 # --- Audio Engine (shared InputStream) ---
 class AudioEngine(QtCore.QObject):
@@ -329,10 +459,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.rename_proj_btn = QtWidgets.QPushButton("Rename Project")
         self.rename_proj_btn.clicked.connect(self.rename_project)
         v2.addWidget(self.rename_proj_btn)
+
         self.duplicate_proj_btn = QtWidgets.QPushButton("Duplicate Project")
         self.duplicate_proj_btn.clicked.connect(self.duplicate_project)
         v2.addWidget(self.duplicate_proj_btn)
+
         right_v.addLayout(v2)
+
+        v3 = QtWidgets.QHBoxLayout()
+        self.assign_root_btn = QtWidgets.QPushButton("Assign Root Note Metadata to All Files")
+        self.assign_root_btn.clicked.connect(self.assign_root_notes)
+        v3.addWidget(self.assign_root_btn)
+
+        right_v.addLayout(v3)  # Add it below the previous row
 
         main_h.addLayout(right_v, 1)
         vbox.addLayout(main_h)
@@ -688,6 +827,43 @@ class MainWindow(QtWidgets.QMainWindow):
                 json.dump(cfg, f)
         except Exception:
             pass
+
+    def assign_root_notes(self):
+        if not self.current_project:
+            QtWidgets.QMessageBox.warning(self, "No project", "Please select a project first.")
+            return
+        proj_path = os.path.join(self.projects_dir(), self.current_project)
+        files = sorted(f for f in os.listdir(proj_path) if f.lower().endswith('.wav'))
+        if not files:
+            QtWidgets.QMessageBox.information(self, "No files", "No WAV files found in this project.")
+            return
+
+        skipped = []
+        updated_count = 0
+        for fn in files:
+            token = fn.split('_', 1)[0]
+            parsed = parse_note_token(token)
+            if not parsed:
+                skipped.append(fn)
+                continue
+            note_name, octave = parsed
+            try:
+                midi = note_to_midi(note_name, octave, mapping='c4')
+            except Exception:
+                skipped.append(fn)
+                continue
+            try:
+                inject_smpl(os.path.join(proj_path, fn), midi, backup=True)
+                updated_count += 1
+            except Exception as e:
+                skipped.append(f"{fn} ({e})")
+
+        msg = f"Updated {updated_count} files with root note metadata."
+        if skipped:
+            msg += f"\nSkipped {len(skipped)} files:\n" + "\n".join(skipped)
+        QtWidgets.QMessageBox.information(self, "Assign Root Notes", msg)
+        self.status.setText(f"Root note assignment done for {updated_count} files.")
+
 
 # --- run ---
 if __name__ == '__main__':
