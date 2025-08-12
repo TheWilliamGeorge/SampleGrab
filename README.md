@@ -9,6 +9,10 @@ Linux
 Python Universal (requires XXXXXXXX)
 
 A Windows build is under development, so for now, please use the Python Universal version ([SampleGrab.py](https://github.com/TheWilliamGeorge/SampleGrab/blob/main/SampleGrab.py))
+Python dependencies:
+```bash
+ pip install PySide6 sounddevice soundfile numpy
+```
 
 ## Installation
 #### MacOS: 
