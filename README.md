@@ -47,7 +47,8 @@ Built with the PySide6 wrapper for the QT GUI framework, SampleGrab is lightweig
 
 
 ## Future development
-- [ ] Assign Root Note Metadata for simple importing to samplers
+- [ ] Windows version
+- [x] Assign Root Note Metadata for simple importing to samplers
 - [ ] Waveforms
 - [ ] Set default name for samples
 - [ ] When default names are enabled, numbers applied to multi-samples
