@@ -36,6 +36,10 @@ sudo apt-get install libportaudio2
 - Export all samples to .zip 
 - Completely free and open-source
 
+This application uses PySide6, which is licensed under the GNU Lesser General Public License (LGPL) version 3.
+You can obtain the PySide6 source code from https://code.qt.io and replace or modify it in accordance with the LGPL.
+PySide6 source code: https://code.qt.io/cgit/pyside/pyside-setup.git/
+Qt and PySide6 are © The Qt Company Ltd and licensed under the GNU LGPL v3.
 
 ## The story of SampleGrab
 Recently, I was clearing out some old stuff and came across an old keyboard I had as a child. The volume slider was semi-functional and I didn’t really need it anymore (I have a full size piano now), but the sounds were very nostalgic, and I felt that it would be a shame to lose them (I couldn’t find them anywhere on the internet). So, I decided to sample the entire sound bank. 
