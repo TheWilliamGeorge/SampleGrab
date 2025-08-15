@@ -51,6 +51,8 @@ Built with the PySide6 wrapper for the QT GUI framework, SampleGrab is lightweig
 
 
 ## Future development
+- [ ] Stereo audio inputs
+- [ ] Input channel selection
 - [ ] Windows version
 - [x] Assign Root Note Metadata for simple importing to samplers
 - [ ] Waveforms
